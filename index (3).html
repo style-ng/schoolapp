@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Take Your School Digital</title>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --navy:#1b2a4a;
+    --navy-light:#28407a;
+    --gold:#c9971f;
+    --gold-light:#e0b84a;
+    --cream:#faf7ef;
+    --ink:#1c1c1a;
+    --line:#e6e1d2;
+    --muted:#6b6a63;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--cream);color:var(--ink);}
+  .wrap{max-width:960px;margin:0 auto;padding:0 24px;}
+
+  header{padding:56px 0 40px;position:relative;overflow:hidden;}
+  .icon-row{display:flex;gap:18px;margin-bottom:22px;}
+  .icon-row svg{width:38px;height:38px;}
+  .eyebrow{color:var(--gold);font-weight:800;font-size:13px;letter-spacing:1px;margin-bottom:12px;}
+  h1{font-size:50px;line-height:1.08;margin:0 0 18px;letter-spacing:-1px;color:var(--navy);}
+  h1 .accent{color:var(--gold);}
+  .lede{font-size:18px;color:var(--muted);max-width:520px;line-height:1.55;margin-bottom:30px;}
+  .cta-btn{background:var(--navy);color:#fff;border:none;padding:16px 30px;font-size:16px;font-weight:700;border-radius:8px;cursor:pointer;}
+  .cta-btn:hover{background:var(--navy-light);}
+
+  section.features{padding:44px 0 56px;border-top:1px solid var(--line);}
+  .section-title{font-size:22px;font-weight:800;color:var(--navy);margin-bottom:22px;}
+  .feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+  .feature{display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid var(--line);}
+  .feature .check{width:24px;height:24px;border-radius:50%;background:var(--gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;margin-top:1px;}
+  .feature .txt{font-size:16px;font-weight:600;}
+
+  .pricing{background:var(--navy);color:#fff;border-radius:16px;padding:40px;text-align:center;margin:44px 0;position:relative;overflow:hidden;}
+  .pricing .cap{width:46px;height:46px;margin:0 auto 12px;}
+  .pricing .label{letter-spacing:1px;font-size:13px;color:#b9c3dd;font-weight:700;}
+  .pricing .price{font-size:42px;font-weight:800;color:var(--gold-light);margin:8px 0;}
+  .pricing .note{color:#c9d1e6;font-size:14px;}
+
+  form.lead{background:#fff;border:1px solid var(--line);border-radius:16px;padding:32px;margin-bottom:60px;}
+  form.lead h3{margin-top:0;color:var(--navy);font-size:20px;}
+  .field{margin-bottom:14px;}
+  label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:5px;}
+  input,textarea{width:100%;font-family:inherit;font-size:15px;padding:11px 13px;border:1px solid var(--line);border-radius:8px;}
+  .msg{padding:12px 14px;border-radius:8px;font-size:14px;margin-bottom:16px;}
+  .msg.ok{background:#e8f0e3;color:#3d6b2e;}
+  .msg.error{background:#f6dfda;color:#b3402f;}
+
+  footer{text-align:center;padding:30px 0;color:var(--muted);font-size:13px;border-top:1px solid var(--line);}
+
+  @media (max-width:640px){
+    h1{font-size:34px;}
+    .feature-grid{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="icon-row">
+      <svg viewBox="0 0 64 64" fill="none"><path d="M32 10 4 24l28 14 28-14-28-14Z" fill="#1b2a4a"/><path d="M16 30v14c0 4 7 10 16 10s16-6 16-10V30" stroke="#1b2a4a" stroke-width="3" fill="none"/><path d="M56 24v16" stroke="#c9971f" stroke-width="3" stroke-linecap="round"/></svg>
+      <svg viewBox="0 0 64 64" fill="none"><path d="M32 16c-6-5-16-6-24-4v34c8-2 18-1 24 4 6-5 16-6 24-4V12c-8-2-18-1-24 4Z" fill="#c9971f"/><path d="M32 16v34" stroke="#fff" stroke-width="2"/></svg>
+      <svg viewBox="0 0 64 64" fill="none"><rect x="10" y="38" width="40" height="10" rx="2" transform="rotate(-35 10 38)" fill="#28407a"/><path d="M6 52l6 6 8-4-10-10-4 8Z" fill="#1b2a4a"/></svg>
+    </div>
+    <div class="eyebrow">SCHOOL MANAGEMENT, HANDLED</div>
+    <h1>Take your school<br/><span class="accent">digital</span></h1>
+    <p class="lede">Report cards, attendance, fees, admissions, and a branded app for your school — all in one place, set up in days, not months.</p>
+    <button class="cta-btn" onclick="document.getElementById('lead-form').scrollIntoView({behavior:'smooth'})">Sign up now</button>
+  </header>
+
+  <section class="features">
+    <div class="section-title">Everything included</div>
+    <div class="feature-grid">
+      <div class="feature"><div class="check">✓</div><div class="txt">Custom report cards</div></div>
+      <div class="feature"><div class="check">✓</div><div class="txt">Computer based tests</div></div>
+      <div class="feature"><div class="check">✓</div><div class="txt">Teacher check-in/out</div></div>
+      <div class="feature"><div class="check">✓</div><div class="txt">Student attendance</div></div>
+      <div class="feature"><div class="check">✓</div><div class="txt">Fees and payments</div></div>
+      <div class="feature"><div class="check">✓</div><div class="txt">Admissions</div></div>
+      <div class="feature"><div class="check">✓</div><div class="txt">Announcements & events</div></div>
+      <div class="feature"><div class="check">✓</div><div class="txt">Class & subject teachers</div></div>
+    </div>
+
+    <div class="pricing">
+      <svg class="cap" viewBox="0 0 64 64" fill="none"><path d="M32 10 4 24l28 14 28-14-28-14Z" fill="#e0b84a"/><path d="M16 30v14c0 4 7 10 16 10s16-6 16-10V30" stroke="#e0b84a" stroke-width="3" fill="none"/></svg>
+      <div class="label">ALL INCLUDED FOR</div>
+      <div class="price">₦5,000/month</div>
+      <div class="note">Sign up now and get your first month free</div>
+    </div>
+  </section>
+
+  <form class="lead" id="lead-form">
+    <h3>Get started</h3>
+    <div id="lead-msg"></div>
+    <div class="field"><label>School name</label><input id="school_name" required /></div>
+    <div class="field"><label>Contact name</label><input id="contact_name" /></div>
+    <div class="field"><label>Phone</label><input id="phone" required /></div>
+    <div class="field"><label>Email</label><input id="email" type="email" /></div>
+    <div class="field"><label>Anything you'd like us to know</label><textarea id="message" rows="3"></textarea></div>
+    <button type="submit" class="cta-btn">Request setup</button>
+  </form>
+
+  <footer>School Management Platform · Built for Nigerian schools</footer>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://xmuocuyplkpiskhdidal.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_S6S5ArhagrOptreJwpB-dQ_2Y4lC_gn";
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  document.getElementById("lead-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msgEl = document.getElementById("lead-msg");
+    const payload = {
+      school_name: document.getElementById("school_name").value,
+      contact_name: document.getElementById("contact_name").value,
+      phone: document.getElementById("phone").value,
+      email: document.getElementById("email").value,
+      message: document.getElementById("message").value,
+    };
+    const { error } = await sb.from("leads").insert(payload);
+    if (error) {
+      msgEl.innerHTML = `<div class="msg error">Something went wrong — please try again or WhatsApp us directly.</div>`;
+    } else {
+      msgEl.innerHTML = `<div class="msg ok">Thanks! We'll reach out shortly to get your school set up.</div>`;
+      e.target.reset();
+    }
+  });
+</script>
+</body>
+</html>

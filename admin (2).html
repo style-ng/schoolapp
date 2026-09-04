@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>School Admin</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --forest:#1b2a4a;
+    --forest-light:#28407a;
+    --gold:#c9971f;
+    --sand:#faf7ef;
+    --ink:#1c1c1a;
+    --line:#e6e1d2;
+    --muted:#6b6a63;
+    --danger:#b3402f;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--sand);color:var(--ink);}
+  #root{min-height:100vh;}
+  .app{display:flex;min-height:100vh;}
+  .sidebar{width:230px;background:var(--forest);color:#fff;padding:24px 0;flex-shrink:0;}
+  .sidebar h1{font-size:18px;padding:0 20px 20px;margin:0;border-bottom:1px solid rgba(255,255,255,.15);letter-spacing:.2px;}
+  .nav-item{padding:12px 20px;cursor:pointer;font-size:14px;opacity:.85;border-left:3px solid transparent;}
+  .nav-item:hover{opacity:1;background:rgba(255,255,255,.06);}
+  .nav-item.active{opacity:1;background:rgba(255,255,255,.1);border-left-color:#fff;font-weight:600;}
+  .main{flex:1;padding:28px 36px;max-width:1100px;}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;}
+  .topbar h2{margin:0;font-size:22px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:18px;}
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  th{text-align:left;padding:10px 8px;border-bottom:2px solid var(--line);color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px;}
+  td{padding:10px 8px;border-bottom:1px solid var(--line);}
+  tr:hover td{background:#fafaf7;}
+  input,select,textarea{font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;width:100%;background:#fff;}
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px;font-weight:600;}
+  .field{margin-bottom:14px;}
+  .row{display:flex;gap:14px;}
+  .row > .field{flex:1;}
+  button{background:var(--forest);color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:14px;cursor:pointer;font-weight:600;}
+  button:hover{background:var(--forest-light);}
+  button.ghost{background:transparent;color:var(--forest);border:1px solid var(--line);}
+  button.danger{background:var(--danger);}
+  .pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;}
+  .pill.green{background:#e3f0e6;color:var(--forest);}
+  .pill.amber{background:#fbeecb;color:#8a5a11;}
+  .pill.red{background:#f6dfda;color:var(--danger);}
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:18px;}
+  .stat .num{font-size:28px;font-weight:700;color:var(--forest);}
+  .stat .label{font-size:13px;color:var(--muted);margin-top:4px;}
+  .empty{color:var(--muted);font-size:14px;padding:20px 0;text-align:center;}
+  .login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;}
+  .login-box{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:36px;width:340px;}
+  .login-box h1{font-size:20px;margin:0 0 4px;}
+  .login-box p{color:var(--muted);font-size:13px;margin:0 0 20px;}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+  .msg{font-size:13px;padding:10px 12px;border-radius:8px;margin-bottom:14px;}
+  .msg.error{background:#f6dfda;color:var(--danger);}
+  .msg.ok{background:#e3f0e6;color:var(--forest);}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useMemo } = React;
+
+// ---- CONFIGURE THESE before deploying ----
+const SUPABASE_URL = "https://xmuocuyplkpiskhdidal.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_S6S5ArhagrOptreJwpB-dQ_2Y4lC_gn";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const NAV = [
+  { key: "dashboard", label: "Dashboard" },
+  { key: "students", label: "Students" },
+  { key: "attendance", label: "Attendance" },
+  { key: "teachers", label: "Teacher Check-in" },
+  { key: "fees", label: "Fees & Payments" },
+  { key: "reportcards", label: "Report Cards" },
+  { key: "admissions", label: "Admissions" },
+  { key: "announcements", label: "Announcements" },
+  { key: "cbt", label: "CBT" },
+];
+
+function useAuth() {
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    sb.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      if (data.session) loadProfile(data.session.user.id);
+      else setLoading(false);
+    });
+    const { data: sub } = sb.auth.onAuthStateChange((_e, sess) => {
+      setSession(sess);
+      if (sess) loadProfile(sess.user.id);
+      else { setProfile(null); setLoading(false); }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  async function loadProfile(userId) {
+    const { data } = await sb.from("profiles").select("*").eq("id", userId).single();
+    setProfile(data);
+    setLoading(false);
+  }
+
+  return { session, profile, loading };
+}
+
+function LoginScreen() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    setError("");
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) setError(error.message);
+  }
+
+  return (
+    <div className="login-wrap">
+      <form className="login-box" onSubmit={handleLogin}>
+        <h1>School Admin</h1>
+        <p>Sign in to manage your school</p>
+        {error && <div className="msg error">{error}</div>}
+        <div className="field">
+          <label>Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+        </div>
+        <div className="field">
+          <label>Password</label>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+        </div>
+        <button type="submit" style={{ width: "100%" }}>Sign in</button>
+      </form>
+    </div>
+  );
+}
+
+// ---------- Generic table helpers ----------
+function useTable(table, schoolId, extraFilter) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  async function refresh() {
+    if (!schoolId) return;
+    setLoading(true);
+    let q = sb.from(table).select("*").eq("school_id", schoolId).order("created_at", { ascending: false });
+    if (extraFilter) q = extraFilter(q);
+    const { data } = await q;
+    setRows(data || []);
+    setLoading(false);
+  }
+
+  useEffect(() => { refresh(); }, [schoolId]);
+  return { rows, loading, refresh };
+}
+
+// ---------- DASHBOARD ----------
+function Dashboard({ schoolId }) {
+  const [stats, setStats] = useState({ students: 0, teachers: 0, pendingFees: 0, admissions: 0 });
+
+  useEffect(() => {
+    async function load() {
+      const [s, t, p, a] = await Promise.all([
+        sb.from("students").select("id", { count: "exact", head: true }).eq("school_id", schoolId),
+        sb.from("profiles").select("id", { count: "exact", head: true }).eq("school_id", schoolId).eq("role", "teacher"),
+        sb.from("payments").select("id", { count: "exact", head: true }).eq("school_id", schoolId).eq("status", "pending"),
+        sb.from("admissions").select("id", { count: "exact", head: true }).eq("school_id", schoolId).eq("status", "pending"),
+      ]);
+      setStats({
+        students: s.count || 0, teachers: t.count || 0,
+        pendingFees: p.count || 0, admissions: a.count || 0,
+      });
+    }
+    if (schoolId) load();
+  }, [schoolId]);
+
+  return (
+    <div>
+      <div className="stat-grid">
+        <div className="stat"><div className="num">{stats.students}</div><div className="label">Active students</div></div>
+        <div className="stat"><div className="num">{stats.teachers}</div><div className="label">Teachers</div></div>
+        <div className="stat"><div className="num">{stats.pendingFees}</div><div className="label">Pending payments</div></div>
+        <div className="stat"><div className="num">{stats.admissions}</div><div className="label">New applications</div></div>
+      </div>
+      <div className="card">
+        <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>
+          Use the sidebar to manage students, mark attendance, record fees, publish report cards,
+          review admissions, post announcements, and run CBT tests.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------- STUDENTS ----------
+function Students({ schoolId }) {
+  const { rows, loading, refresh } = useTable("students", schoolId);
+  const [form, setForm] = useState(null);
+
+  async function save(e) {
+    e.preventDefault();
+    const payload = { ...form, school_id: schoolId };
+    if (form.id) await sb.from("students").update(payload).eq("id", form.id);
+    else await sb.from("students").insert(payload);
+    setForm(null);
+    refresh();
+  }
+  async function remove(id) {
+    if (!confirm("Remove this student?")) return;
+    await sb.from("students").delete().eq("id", id);
+    refresh();
+  }
+
+  return (
+    <div>
+      <div className="toolbar">
+        <div className="empty" style={{ padding: 0 }}>{rows.length} students</div>
+        <button onClick={() => setForm({ full_name: "", admission_number: "", gender: "", parent_name: "", parent_phone: "" })}>+ Add student</button>
+      </div>
+
+      {form && (
+        <div className="card">
+          <form onSubmit={save}>
+            <div className="row">
+              <div className="field"><label>Full name</label><input required value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} /></div>
+              <div className="field"><label>Admission number</label><input required value={form.admission_number} onChange={e => setForm({ ...form, admission_number: e.target.value })} /></div>
+            </div>
+            <div className="row">
+              <div className="field"><label>Gender</label>
+                <select value={form.gender || ""} onChange={e => setForm({ ...form, gender: e.target.value })}>
+                  <option value="">—</option><option>Male</option><option>Female</option>
+                </select>
+              </div>
+              <div className="field"><label>Parent name</label><input value={form.parent_name || ""} onChange={e => setForm({ ...form, parent_name: e.target.value })} /></div>
+              <div className="field"><label>Parent phone</label><input value={form.parent_phone || ""} onChange={e => setForm({ ...form, parent_phone: e.target.value })} /></div>
+            </div>
+            <button type="submit">Save</button>{" "}
+            <button type="button" className="ghost" onClick={() => setForm(null)}>Cancel</button>
+          </form>
+        </div>
+      )}
+
+      <div className="card">
+        {loading ? <div className="empty">Loading…</div> : rows.length === 0 ? <div className="empty">No students yet — add your first one above.</div> : (
+          <table>
+            <thead><tr><th>Name</th><th>Adm. No</th><th>Gender</th><th>Parent</th><th>Phone</th><th></th></tr></thead>
+            <tbody>
+              {rows.map(s => (
+                <tr key={s.id}>
+                  <td>{s.full_name}</td><td>{s.admission_number}</td><td>{s.gender}</td>
+                  <td>{s.parent_name}</td><td>{s.parent_phone}</td>
+                  <td>
+                    <button className="ghost" onClick={() => setForm(s)}>Edit</button>{" "}
+                    <button className="danger" onClick={() => remove(s.id)}>Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- ATTENDANCE ----------
+function Attendance({ schoolId }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [students, setStudents] = useState([]);
+  const [marks, setMarks] = useState({});
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await sb.from("students").select("*").eq("school_id", schoolId).order("full_name");
+      setStudents(data || []);
+      const { data: existing } = await sb.from("student_attendance").select("*").eq("school_id", schoolId).eq("date", date);
+      const m = {};
+      (existing || []).forEach(r => { m[r.student_id] = r.status; });
+      setMarks(m);
+    }
+    if (schoolId) load();
+  }, [schoolId, date]);
+
+  async function setStatus(studentId, status) {
+    setMarks(m => ({ ...m, [studentId]: status }));
+    await sb.from("student_attendance").upsert({
+      school_id: schoolId, student_id: studentId, date, status,
+    }, { onConflict: "student_id,date" });
+  }
+
+  return (
+    <div>
+      <div className="card">
+        <div className="field" style={{ maxWidth: 220 }}>
+          <label>Date</label>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} />
+        </div>
+      </div>
+      <div className="card">
+        {students.length === 0 ? <div className="empty">No students found.</div> : (
+          <table>
+            <thead><tr><th>Student</th><th>Status</th></tr></thead>
+            <tbody>
+              {students.map(s => (
+                <tr key={s.id}>
+                  <td>{s.full_name}</td>
+                  <td>
+                    {["present", "absent", "late", "excused"].map(opt => (
+                      <button
+                        key={opt}
+                        className={marks[s.id] === opt ? "" : "ghost"}
+                        style={{ marginRight: 6, padding: "6px 12px", fontSize: 12 }}
+                        onClick={() => setStatus(s.id, opt)}
+                      >{opt}</button>
+                    ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- TEACHER CHECK-IN ----------
+function TeacherCheckin({ schoolId, profile }) {
+  const { rows, refresh } = useTable("teacher_attendance", schoolId);
+  const today = new Date().toISOString().slice(0, 10);
+  const myRow = rows.find(r => r.teacher_id === profile.id && r.date === today);
+
+  async function checkIn() {
+    await sb.from("teacher_attendance").upsert({
+      school_id: schoolId, teacher_id: profile.id, date: today, check_in: new Date().toISOString(),
+    }, { onConflict: "teacher_id,date" });
+    refresh();
+  }
+  async function checkOut() {
+    await sb.from("teacher_attendance").update({ check_out: new Date().toISOString() })
+      .eq("teacher_id", profile.id).eq("date", today);
+    refresh();
+  }
+
+  return (
+    <div>
+      <div className="card">
+        <p style={{ marginTop: 0 }}>Today: {today}</p>
+        {!myRow?.check_in && <button onClick={checkIn}>Check in</button>}
+        {myRow?.check_in && !myRow?.check_out && <button onClick={checkOut}>Check out</button>}
+        {myRow?.check_in && myRow?.check_out && <span className="pill green">Completed for today</span>}
+      </div>
+      <div className="card">
+        <table>
+          <thead><tr><th>Teacher</th><th>Date</th><th>Check-in</th><th>Check-out</th></tr></thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id}>
+                <td>{r.teacher_id === profile.id ? profile.full_name : r.teacher_id}</td>
+                <td>{r.date}</td>
+                <td>{r.check_in ? new Date(r.check_in).toLocaleTimeString() : "—"}</td>
+                <td>{r.check_out ? new Date(r.check_out).toLocaleTimeString() : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---------- FEES & PAYMENTS ----------
+function Fees({ schoolId }) {
+  const { rows: payments, refresh } = useTable("payments", schoolId);
+  const [students, setStudents] = useState([]);
+  const [form, setForm] = useState(null);
+
+  useEffect(() => {
+    sb.from("students").select("id, full_name").eq("school_id", schoolId).then(({ data }) => setStudents(data || []));
+  }, [schoolId]);
+
+  async function save(e) {
+    e.preventDefault();
+    await sb.from("payments").insert({ ...form, school_id: schoolId });
+    setForm(null);
+    refresh();
+  }
+
+  const studentName = id => students.find(s => s.id === id)?.full_name || "—";
+  const pillClass = status => status === "confirmed" ? "green" : status === "duplicate_flagged" ? "red" : "amber";
+
+  return (
+    <div>
+      <div className="toolbar">
+        <div className="empty" style={{ padding: 0 }}>{payments.length} payment records</div>
+        <button onClick={() => setForm({ student_id: "", amount: "", provider: "cash", reference: "", status: "confirmed" })}>+ Record payment</button>
+      </div>
+      {form && (
+        <div className="card">
+          <form onSubmit={save}>
+            <div className="row">
+              <div className="field"><label>Student</label>
+                <select required value={form.student_id} onChange={e => setForm({ ...form, student_id: e.target.value })}>
+                  <option value="">Select…</option>
+                  {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                </select>
+              </div>
+              <div className="field"><label>Amount (₦)</label><input required type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} /></div>
+            </div>
+            <div className="row">
+              <div className="field"><label>Provider</label>
+                <select value={form.provider} onChange={e => setForm({ ...form, provider: e.target.value })}>
+                  <option value="cash">Cash</option><option value="remita">Remita</option>
+                  <option value="palmpay">PalmPay</option><option value="paystack">Paystack</option>
+                  <option value="bank_transfer">Bank transfer</option>
+                </select>
+              </div>
+              <div className="field"><label>Reference (RRR / txn ref)</label><input value={form.reference} onChange={e => setForm({ ...form, reference: e.target.value })} /></div>
+            </div>
+            <button type="submit">Save</button>{" "}
+            <button type="button" className="ghost" onClick={() => setForm(null)}>Cancel</button>
+          </form>
+        </div>
+      )}
+      <div className="card">
+        {payments.length === 0 ? <div className="empty">No payments recorded yet.</div> : (
+          <table>
+            <thead><tr><th>Student</th><th>Amount</th><th>Provider</th><th>Reference</th><th>Status</th></tr></thead>
+            <tbody>
+              {payments.map(p => (
+                <tr key={p.id}>
+                  <td>{studentName(p.student_id)}</td>
+                  <td>₦{Number(p.amount).toLocaleString()}</td>
+                  <td>{p.provider}</td>
+                  <td>{p.reference || "—"}</td>
+                  <td><span className={`pill ${pillClass(p.status)}`}>{p.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- REPORT CARDS ----------
+function ReportCards({ schoolId }) {
+  const { rows, refresh } = useTable("report_cards", schoolId);
+  const [students, setStudents] = useState([]);
+  const [form, setForm] = useState(null);
+
+  useEffect(() => {
+    sb.from("students").select("id, full_name").eq("school_id", schoolId).then(({ data }) => setStudents(data || []));
+  }, [schoolId]);
+
+  async function save(e) {
+    e.preventDefault();
+    await sb.from("report_cards").upsert({ ...form, school_id: schoolId }, { onConflict: "student_id,term" });
+    setForm(null);
+    refresh();
+  }
+
+  const studentName = id => students.find(s => s.id === id)?.full_name || "—";
+
+  return (
+    <div>
+      <div className="toolbar">
+        <div className="empty" style={{ padding: 0 }}>{rows.length} report cards</div>
+        <button onClick={() => setForm({ student_id: "", term: "", overall_average: "", class_position: "", class_teacher_comment: "", status: "draft" })}>+ New report card</button>
+      </div>
+      {form && (
+        <div className="card">
+          <form onSubmit={save}>
+            <div className="row">
+              <div className="field"><label>Student</label>
+                <select required value={form.student_id} onChange={e => setForm({ ...form, student_id: e.target.value })}>
+                  <option value="">Select…</option>
+                  {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                </select>
+              </div>
+              <div className="field"><label>Term</label><input required placeholder="e.g. 2026/2027 First Term" value={form.term} onChange={e => setForm({ ...form, term: e.target.value })} /></div>
+            </div>
+            <div className="row">
+              <div className="field"><label>Overall average</label><input type="number" value={form.overall_average} onChange={e => setForm({ ...form, overall_average: e.target.value })} /></div>
+              <div className="field"><label>Class position</label><input value={form.class_position} onChange={e => setForm({ ...form, class_position: e.target.value })} /></div>
+            </div>
+            <div className="field"><label>Class teacher's comment</label><textarea rows="2" value={form.class_teacher_comment} onChange={e => setForm({ ...form, class_teacher_comment: e.target.value })} /></div>
+            <div className="field" style={{ maxWidth: 200 }}><label>Status</label>
+              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+                <option value="draft">Draft</option><option value="published">Published</option>
+              </select>
+            </div>
+            <button type="submit">Save</button>{" "}
+            <button type="button" className="ghost" onClick={() => setForm(null)}>Cancel</button>
+          </form>
+        </div>
+      )}
+      <div className="card">
+        {rows.length === 0 ? <div className="empty">No report cards yet. Scores are entered per-subject in Assessment; this generates the final card.</div> : (
+          <table>
+            <thead><tr><th>Student</th><th>Term</th><th>Average</th><th>Position</th><th>Status</th></tr></thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id}>
+                  <td>{studentName(r.student_id)}</td><td>{r.term}</td>
+                  <td>{r.overall_average || "—"}</td><td>{r.class_position || "—"}</td>
+                  <td><span className={`pill ${r.status === "published" ? "green" : "amber"}`}>{r.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- ADMISSIONS ----------
+function Admissions({ schoolId }) {
+  const { rows, refresh } = useTable("admissions", schoolId);
+
+  async function setStatus(id, status) {
+    await sb.from("admissions").update({ status }).eq("id", id);
+    refresh();
+  }
+
+  return (
+    <div className="card">
+      {rows.length === 0 ? <div className="empty">No applications yet.</div> : (
+        <table>
+          <thead><tr><th>Applicant</th><th>Desired class</th><th>Parent</th><th>Phone</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {rows.map(a => (
+              <tr key={a.id}>
+                <td>{a.applicant_name}</td><td>{a.desired_class}</td>
+                <td>{a.parent_name}</td><td>{a.parent_phone}</td>
+                <td><span className="pill amber">{a.status}</span></td>
+                <td>
+                  <select value={a.status} onChange={e => setStatus(a.id, e.target.value)}>
+                    <option value="pending">Pending</option><option value="reviewed">Reviewed</option>
+                    <option value="offered">Offered</option><option value="enrolled">Enrolled</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+// ---------- ANNOUNCEMENTS ----------
+function Announcements({ schoolId, profile }) {
+  const { rows, refresh } = useTable("announcements", schoolId);
+  const [form, setForm] = useState(null);
+
+  async function save(e) {
+    e.preventDefault();
+    await sb.from("announcements").insert({ ...form, school_id: schoolId, created_by: profile.id });
+    setForm(null);
+    refresh();
+  }
+
+  return (
+    <div>
+      <div className="toolbar">
+        <div className="empty" style={{ padding: 0 }}>{rows.length} posted</div>
+        <button onClick={() => setForm({ title: "", body: "", audience: "all", event_date: "" })}>+ New announcement</button>
+      </div>
+      {form && (
+        <div className="card">
+          <form onSubmit={save}>
+            <div className="field"><label>Title</label><input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></div>
+            <div className="field"><label>Message</label><textarea rows="3" value={form.body} onChange={e => setForm({ ...form, body: e.target.value })} /></div>
+            <div className="row">
+              <div className="field"><label>Audience</label>
+                <select value={form.audience} onChange={e => setForm({ ...form, audience: e.target.value })}>
+                  <option value="all">Everyone</option><option value="staff">Staff</option>
+                  <option value="parents">Parents</option><option value="students">Students</option>
+                </select>
+              </div>
+              <div className="field"><label>Event date (optional)</label><input type="date" value={form.event_date} onChange={e => setForm({ ...form, event_date: e.target.value })} /></div>
+            </div>
+            <button type="submit">Post</button>{" "}
+            <button type="button" className="ghost" onClick={() => setForm(null)}>Cancel</button>
+          </form>
+        </div>
+      )}
+      {rows.map(a => (
+        <div className="card" key={a.id}>
+          <strong>{a.title}</strong>{a.event_date && <span className="pill green" style={{ marginLeft: 8 }}>{a.event_date}</span>}
+          <p style={{ color: "var(--muted)", marginBottom: 0 }}>{a.body}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------- CBT ----------
+function CBT({ schoolId, profile }) {
+  const { rows, refresh } = useTable("cbt_tests", schoolId);
+  const [form, setForm] = useState(null);
+
+  async function save(e) {
+    e.preventDefault();
+    await sb.from("cbt_tests").insert({ ...form, school_id: schoolId, created_by: profile.id });
+    setForm(null);
+    refresh();
+  }
+  async function togglePublish(t) {
+    await sb.from("cbt_tests").update({ is_published: !t.is_published }).eq("id", t.id);
+    refresh();
+  }
+
+  return (
+    <div>
+      <div className="toolbar">
+        <div className="empty" style={{ padding: 0 }}>{rows.length} tests</div>
+        <button onClick={() => setForm({ title: "", duration_minutes: 30 })}>+ New test</button>
+      </div>
+      {form && (
+        <div className="card">
+          <form onSubmit={save}>
+            <div className="row">
+              <div className="field"><label>Test title</label><input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></div>
+              <div className="field"><label>Duration (minutes)</label><input type="number" value={form.duration_minutes} onChange={e => setForm({ ...form, duration_minutes: e.target.value })} /></div>
+            </div>
+            <button type="submit">Create test</button>{" "}
+            <button type="button" className="ghost" onClick={() => setForm(null)}>Cancel</button>
+            <p style={{ fontSize: 12, color: "var(--muted)" }}>Add questions to a test from the cbt_questions table (question editor UI can be added next).</p>
+          </form>
+        </div>
+      )}
+      <div className="card">
+        {rows.length === 0 ? <div className="empty">No tests created yet.</div> : (
+          <table>
+            <thead><tr><th>Title</th><th>Duration</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {rows.map(t => (
+                <tr key={t.id}>
+                  <td>{t.title}</td><td>{t.duration_minutes} min</td>
+                  <td><span className={`pill ${t.is_published ? "green" : "amber"}`}>{t.is_published ? "Published" : "Draft"}</span></td>
+                  <td><button className="ghost" onClick={() => togglePublish(t)}>{t.is_published ? "Unpublish" : "Publish"}</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- APP SHELL ----------
+function App() {
+  const { session, profile, loading } = useAuth();
+  const [tab, setTab] = useState("dashboard");
+
+  if (loading) return <div className="login-wrap">Loading…</div>;
+  if (!session) return <LoginScreen />;
+  if (!profile) return <div className="login-wrap">No profile found for this account. Contact your school admin.</div>;
+
+  const schoolId = profile.school_id;
+
+  const views = {
+    dashboard: <Dashboard schoolId={schoolId} />,
+    students: <Students schoolId={schoolId} />,
+    attendance: <Attendance schoolId={schoolId} />,
+    teachers: <TeacherCheckin schoolId={schoolId} profile={profile} />,
+    fees: <Fees schoolId={schoolId} />,
+    reportcards: <ReportCards schoolId={schoolId} />,
+    admissions: <Admissions schoolId={schoolId} />,
+    announcements: <Announcements schoolId={schoolId} profile={profile} />,
+    cbt: <CBT schoolId={schoolId} profile={profile} />,
+  };
+
+  return (
+    <div className="app">
+      <div className="sidebar">
+        <h1>School Admin</h1>
+        {NAV.map(n => (
+          <div key={n.key} className={`nav-item ${tab === n.key ? "active" : ""}`} onClick={() => setTab(n.key)}>
+            {n.label}
+          </div>
+        ))}
+        <div className="nav-item" style={{ marginTop: 30, borderTop: "1px solid rgba(255,255,255,.15)" }} onClick={() => sb.auth.signOut()}>
+          Sign out
+        </div>
+      </div>
+      <div className="main">
+        <div className="topbar">
+          <h2>{NAV.find(n => n.key === tab)?.label}</h2>
+          <div style={{ fontSize: 13, color: "var(--muted)" }}>{profile.full_name} · {profile.role}</div>
+        </div>
+        {views[tab]}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
