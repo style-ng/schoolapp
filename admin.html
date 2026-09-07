@@ -81,6 +81,7 @@ const NAV = [
   { key: "attendance", label: "Attendance" },
   { key: "teachers", label: "Teacher Check-in" },
   { key: "fees", label: "Fees & Payments" },
+  { key: "assessment", label: "Assessment" },
   { key: "reportcards", label: "Report Cards" },
   { key: "admissions", label: "Admissions" },
   { key: "announcements", label: "Announcements" },
@@ -245,6 +246,10 @@ function Students({ schoolId }) {
               </div>
               <div className="field"><label>Parent name</label><input value={form.parent_name || ""} onChange={e => setForm({ ...form, parent_name: e.target.value })} /></div>
               <div className="field"><label>Parent phone</label><input value={form.parent_phone || ""} onChange={e => setForm({ ...form, parent_phone: e.target.value })} /></div>
+            </div>
+            <div className="field">
+              <label>Parent portal login (User ID) — optional</label>
+              <input value={form.parent_user_id || ""} onChange={e => setForm({ ...form, parent_user_id: e.target.value })} placeholder="Paste the parent's Supabase User UID to give them portal access" />
             </div>
             <button type="submit">Save</button>{" "}
             <button type="button" className="ghost" onClick={() => setForm(null)}>Cancel</button>
@@ -456,14 +461,102 @@ function Fees({ schoolId }) {
   );
 }
 
+// ---------- ASSESSMENT (per-subject scores) ----------
+function Assessment({ schoolId }) {
+  const [students, setStudents] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [term, setTerm] = useState("");
+  const [studentId, setStudentId] = useState("");
+  const [scores, setScores] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    sb.from("students").select("id, full_name").eq("school_id", schoolId).order("full_name").then(({ data }) => setStudents(data || []));
+    sb.from("subjects").select("id, name").eq("school_id", schoolId).order("name").then(({ data }) => setSubjects(data || []));
+  }, [schoolId]);
+
+  useEffect(() => {
+    async function load() {
+      if (!studentId || !term) { setScores({}); return; }
+      const { data } = await sb.from("assessment_scores").select("*").eq("student_id", studentId).eq("term", term);
+      const map = {};
+      (data || []).forEach(r => { map[r.subject_id] = { ca_score: r.ca_score, exam_score: r.exam_score }; });
+      setScores(map);
+    }
+    load();
+  }, [studentId, term]);
+
+  function setScore(subjectId, field, value) {
+    setScores(s => ({ ...s, [subjectId]: { ...s[subjectId], [field]: value } }));
+  }
+
+  async function saveAll() {
+    if (!studentId || !term) return;
+    setSaving(true);
+    const rows = subjects
+      .filter(sub => scores[sub.id] && (scores[sub.id].ca_score || scores[sub.id].exam_score))
+      .map(sub => ({
+        school_id: schoolId, student_id: studentId, subject_id: sub.id, term,
+        ca_score: Number(scores[sub.id].ca_score) || 0,
+        exam_score: Number(scores[sub.id].exam_score) || 0,
+      }));
+    if (rows.length > 0) {
+      await sb.from("assessment_scores").upsert(rows, { onConflict: "student_id,subject_id,term" });
+    }
+    setSaving(false);
+    alert("Scores saved.");
+  }
+
+  return (
+    <div>
+      <div className="card">
+        <div className="row">
+          <div className="field"><label>Student</label>
+            <select value={studentId} onChange={e => setStudentId(e.target.value)}>
+              <option value="">Select…</option>
+              {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+            </select>
+          </div>
+          <div className="field"><label>Term</label><input placeholder="e.g. 2026/2027 First Term" value={term} onChange={e => setTerm(e.target.value)} /></div>
+        </div>
+      </div>
+
+      {studentId && term && (
+        <div className="card">
+          {subjects.length === 0 ? <div className="empty">No subjects set up yet — add subjects in Supabase's `subjects` table first.</div> : (
+            <>
+              <table>
+                <thead><tr><th>Subject</th><th>CA score</th><th>Exam score</th></tr></thead>
+                <tbody>
+                  {subjects.map(sub => (
+                    <tr key={sub.id}>
+                      <td>{sub.name}</td>
+                      <td><input type="number" style={{ maxWidth: 90 }} value={scores[sub.id]?.ca_score ?? ""} onChange={e => setScore(sub.id, "ca_score", e.target.value)} /></td>
+                      <td><input type="number" style={{ maxWidth: 90 }} value={scores[sub.id]?.exam_score ?? ""} onChange={e => setScore(sub.id, "exam_score", e.target.value)} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button style={{ marginTop: 14 }} onClick={saveAll} disabled={saving}>{saving ? "Saving…" : "Save scores"}</button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------- REPORT CARDS ----------
 function ReportCards({ schoolId }) {
   const { rows, refresh } = useTable("report_cards", schoolId);
   const [students, setStudents] = useState([]);
   const [form, setForm] = useState(null);
+  const [genStudentId, setGenStudentId] = useState("");
+  const [genTerm, setGenTerm] = useState("");
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
-    sb.from("students").select("id, full_name").eq("school_id", schoolId).then(({ data }) => setStudents(data || []));
+    sb.from("students").select("id, full_name").eq("school_id", schoolId).order("full_name").then(({ data }) => setStudents(data || []));
   }, [schoolId]);
 
   async function save(e) {
@@ -473,13 +566,43 @@ function ReportCards({ schoolId }) {
     refresh();
   }
 
+  async function generateFromScores() {
+    if (!genStudentId || !genTerm) return;
+    setGenerating(true);
+    const { data: scores } = await sb.from("assessment_scores").select("total_score").eq("student_id", genStudentId).eq("term", genTerm);
+    setGenerating(false);
+    if (!scores || scores.length === 0) {
+      alert("No assessment scores found for this student and term yet — enter them in the Assessment tab first.");
+      return;
+    }
+    const avg = scores.reduce((sum, s) => sum + Number(s.total_score || 0), 0) / scores.length;
+    setForm({
+      student_id: genStudentId, term: genTerm,
+      overall_average: avg.toFixed(2), class_position: "", class_teacher_comment: "", status: "draft",
+    });
+  }
+
   const studentName = id => students.find(s => s.id === id)?.full_name || "—";
 
   return (
     <div>
+      <div className="card">
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Generate from Assessment scores</div>
+        <div className="row">
+          <div className="field"><label>Student</label>
+            <select value={genStudentId} onChange={e => setGenStudentId(e.target.value)}>
+              <option value="">Select…</option>
+              {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+            </select>
+          </div>
+          <div className="field"><label>Term</label><input placeholder="e.g. 2026/2027 First Term" value={genTerm} onChange={e => setGenTerm(e.target.value)} /></div>
+        </div>
+        <button onClick={generateFromScores} disabled={generating}>{generating ? "Calculating…" : "Calculate average & draft report card"}</button>
+      </div>
+
       <div className="toolbar">
         <div className="empty" style={{ padding: 0 }}>{rows.length} report cards</div>
-        <button onClick={() => setForm({ student_id: "", term: "", overall_average: "", class_position: "", class_teacher_comment: "", status: "draft" })}>+ New report card</button>
+        <button onClick={() => setForm({ student_id: "", term: "", overall_average: "", class_position: "", class_teacher_comment: "", status: "draft" })}>+ Blank report card</button>
       </div>
       {form && (
         <div className="card">
@@ -509,7 +632,7 @@ function ReportCards({ schoolId }) {
         </div>
       )}
       <div className="card">
-        {rows.length === 0 ? <div className="empty">No report cards yet. Scores are entered per-subject in Assessment; this generates the final card.</div> : (
+        {rows.length === 0 ? <div className="empty">No report cards yet.</div> : (
           <table>
             <thead><tr><th>Student</th><th>Term</th><th>Average</th><th>Position</th><th>Status</th></tr></thead>
             <tbody>
@@ -789,6 +912,7 @@ function App() {
     attendance: <Attendance schoolId={schoolId} />,
     teachers: <TeacherCheckin schoolId={schoolId} profile={profile} />,
     fees: <Fees schoolId={schoolId} />,
+    assessment: <Assessment schoolId={schoolId} />,
     reportcards: <ReportCards schoolId={schoolId} />,
     admissions: <Admissions schoolId={schoolId} />,
     announcements: <Announcements schoolId={schoolId} profile={profile} />,

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Parent Portal</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --navy:#1b2a4a; --navy-light:#28407a; --gold:#c9971f;
+    --cream:#faf7ef; --ink:#1c1c1a; --line:#e6e1d2; --muted:#6b6a63; --danger:#b3402f;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--cream);color:var(--ink);}
+  .wrap{max-width:640px;margin:0 auto;padding:32px 20px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:22px;margin-bottom:16px;}
+  h1{font-size:22px;color:var(--navy);margin:0 0 6px;}
+  h2{font-size:17px;color:var(--navy);margin:0 0 12px;}
+  p.sub{color:var(--muted);margin:0 0 20px;font-size:14px;}
+  label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:5px;}
+  input{width:100%;font-family:inherit;font-size:15px;padding:11px 13px;border:1px solid var(--line);border-radius:8px;margin-bottom:14px;}
+  button{background:var(--navy);color:#fff;border:none;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;}
+  button:hover{background:var(--navy-light);}
+  .msg.error{background:#f6dfda;color:var(--danger);padding:12px 14px;border-radius:8px;font-size:14px;margin-bottom:16px;}
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  th{text-align:left;padding:8px;border-bottom:2px solid var(--line);color:var(--muted);font-size:12px;text-transform:uppercase;}
+  td{padding:8px;border-bottom:1px solid var(--line);}
+  .pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;}
+  .pill.green{background:#e3f0e6;color:var(--navy);}
+  .pill.amber{background:#fbeecb;color:#8a5a11;}
+  .empty{color:var(--muted);font-size:14px;padding:14px 0;}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+  .signout{background:transparent;color:var(--muted);border:1px solid var(--line);font-weight:600;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const SUPABASE_URL = "https://xmuocuyplkpiskhdldal.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_S6S5ArhagrOptreJwpB-dQ_2Y4lC_gn";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function LoginScreen() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    setError("");
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) setError(error.message);
+  }
+
+  return (
+    <div className="wrap">
+      <div className="card">
+        <h1>Parent Portal</h1>
+        <p className="sub">Sign in to see your child's attendance, fees, and report card.</p>
+        {error && <div className="msg error">{error}</div>}
+        <form onSubmit={handleLogin}>
+          <label>Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+          <label>Password</label>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          <button type="submit" style={{ width: "100%" }}>Sign in</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ChildSection({ child }) {
+  const [attendance, setAttendance] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [reportCards, setReportCards] = useState([]);
+
+  useEffect(() => {
+    sb.from("student_attendance").select("*").eq("student_id", child.id).order("date", { ascending: false }).limit(10)
+      .then(({ data }) => setAttendance(data || []));
+    sb.from("payments").select("*").eq("student_id", child.id).order("paid_at", { ascending: false })
+      .then(({ data }) => setPayments(data || []));
+    sb.from("report_cards").select("*").eq("student_id", child.id).eq("status", "published")
+      .then(({ data }) => setReportCards(data || []));
+  }, [child.id]);
+
+  const presentCount = attendance.filter(a => a.status === "present").length;
+
+  return (
+    <div className="card">
+      <h2>{child.full_name} <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 14 }}>· {child.admission_number}</span></h2>
+
+      <div style={{ marginBottom: 16 }}>
+        <strong style={{ fontSize: 14 }}>Recent attendance</strong>
+        {attendance.length === 0 ? <div className="empty">No attendance recorded yet.</div> : (
+          <table>
+            <thead><tr><th>Date</th><th>Status</th></tr></thead>
+            <tbody>
+              {attendance.map(a => (
+                <tr key={a.id}><td>{a.date}</td><td><span className={`pill ${a.status === "present" ? "green" : "amber"}`}>{a.status}</span></td></tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <strong style={{ fontSize: 14 }}>Payments</strong>
+        {payments.length === 0 ? <div className="empty">No payments on record yet.</div> : (
+          <table>
+            <thead><tr><th>Amount</th><th>Provider</th><th>Status</th></tr></thead>
+            <tbody>
+              {payments.map(p => (
+                <tr key={p.id}><td>₦{Number(p.amount).toLocaleString()}</td><td>{p.provider}</td><td><span className={`pill ${p.status === "confirmed" ? "green" : "amber"}`}>{p.status}</span></td></tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div>
+        <strong style={{ fontSize: 14 }}>Report cards</strong>
+        {reportCards.length === 0 ? <div className="empty">No published report cards yet.</div> : (
+          reportCards.map(r => (
+            <div key={r.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
+              <strong>{r.term}</strong> — Average: {r.overall_average || "—"}, Position: {r.class_position || "—"}
+              {r.class_teacher_comment && <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 4 }}>{r.class_teacher_comment}</div>}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ profile }) {
+  const [children, setChildren] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    sb.from("students").select("*").eq("parent_user_id", profile.id).then(({ data }) => {
+      setChildren(data || []);
+      setLoading(false);
+    });
+  }, [profile.id]);
+
+  return (
+    <div className="wrap">
+      <div className="topbar">
+        <h1 style={{ margin: 0 }}>Parent Portal</h1>
+        <button className="signout" onClick={() => sb.auth.signOut()}>Sign out</button>
+      </div>
+      {loading ? <div className="empty">Loading…</div> : children.length === 0 ? (
+        <div className="card"><div className="empty">No children linked to this account yet — contact the school office to have your child's record linked.</div></div>
+      ) : (
+        children.map(child => <ChildSection key={child.id} child={child} />)
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    sb.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      if (data.session) loadProfile(data.session.user.id); else setLoading(false);
+    });
+    const { data: sub } = sb.auth.onAuthStateChange((_e, sess) => {
+      setSession(sess);
+      if (sess) loadProfile(sess.user.id); else { setProfile(null); setLoading(false); }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  async function loadProfile(userId) {
+    const { data } = await sb.from("profiles").select("*").eq("id", userId).single();
+    setProfile(data);
+    setLoading(false);
+  }
+
+  if (loading) return <div className="wrap">Loading…</div>;
+  if (!session) return <LoginScreen />;
+  if (!profile) return <div className="wrap">No profile found for this account.</div>;
+  return <Dashboard profile={profile} />;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
