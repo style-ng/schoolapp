@@ -703,6 +703,11 @@ function CBT({ schoolId, profile }) {
   const { rows, refresh } = useTable("cbt_tests", schoolId);
   const [form, setForm] = useState(null);
   const [activeTest, setActiveTest] = useState(null);
+  const [schoolSlug, setSchoolSlug] = useState("");
+
+  useEffect(() => {
+    sb.from("schools").select("slug").eq("id", schoolId).single().then(({ data }) => setSchoolSlug(data?.slug || ""));
+  }, [schoolId]);
 
   async function save(e) {
     e.preventDefault();
@@ -721,6 +726,13 @@ function CBT({ schoolId, profile }) {
 
   return (
     <div>
+      <div className="card" style={{ background: "#f0f3f9" }}>
+        <strong>Student test link:</strong> share this with students —
+        they enter their admission number and pick a published test.
+        <div style={{ marginTop: 8, fontFamily: "monospace", fontSize: 13, wordBreak: "break-all" }}>
+          {window.location.origin}/cbt.html?school={schoolSlug || "…"}
+        </div>
+      </div>
       <div className="toolbar">
         <div className="empty" style={{ padding: 0 }}>{rows.length} tests</div>
         <button onClick={() => setForm({ title: "", duration_minutes: 30 })}>+ New test</button>
