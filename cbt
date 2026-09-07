@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Take Test — School CBT</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --navy:#1b2a4a; --navy-light:#28407a; --gold:#c9971f;
+    --cream:#faf7ef; --ink:#1c1c1a; --line:#e6e1d2; --muted:#6b6a63; --danger:#b3402f;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--cream);color:var(--ink);}
+  .wrap{max-width:560px;margin:0 auto;padding:40px 20px;min-height:100vh;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:28px;margin-bottom:16px;}
+  h1{font-size:22px;color:var(--navy);margin:0 0 6px;}
+  p.sub{color:var(--muted);margin:0 0 20px;font-size:14px;}
+  label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:5px;}
+  input,select{width:100%;font-family:inherit;font-size:15px;padding:11px 13px;border:1px solid var(--line);border-radius:8px;margin-bottom:14px;}
+  button{background:var(--navy);color:#fff;border:none;padding:13px 22px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;width:100%;}
+  button:hover{background:var(--navy-light);}
+  button:disabled{opacity:.5;cursor:default;}
+  .msg{padding:12px 14px;border-radius:8px;font-size:14px;margin-bottom:16px;}
+  .msg.error{background:#f6dfda;color:var(--danger);}
+  .msg.ok{background:#e8f0e3;color:#3d6b2e;}
+  .test-item{border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:10px;cursor:pointer;}
+  .test-item:hover{border-color:var(--gold);}
+  .test-item strong{display:block;color:var(--navy);}
+  .progress{font-size:13px;color:var(--muted);margin-bottom:6px;}
+  .timer{font-size:13px;color:var(--danger);font-weight:700;float:right;}
+  .q-text{font-size:17px;font-weight:600;margin:14px 0 18px;}
+  .option{display:block;border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px;cursor:pointer;}
+  .option.selected{border-color:var(--navy);background:#f0f3f9;}
+  .option input{width:auto;margin:0 10px 0 0;}
+  .score{font-size:42px;font-weight:800;color:var(--navy);text-align:center;margin:14px 0;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const SUPABASE_URL = "https://xmuocuyplkpiskhdldal.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_S6S5ArhagrOptreJwpB-dQ_2Y4lC_gn";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function getParam(name) {
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+function EntryScreen({ onStarted }) {
+  const schoolSlug = getParam("school") || "";
+  const [slug, setSlug] = useState(schoolSlug);
+  const [admissionNumber, setAdmissionNumber] = useState("");
+  const [tests, setTests] = useState([]);
+  const [error, setError] = useState("");
+  const [loadingTests, setLoadingTests] = useState(false);
+  const [starting, setStarting] = useState(false);
+
+  async function loadTests(e) {
+    e.preventDefault();
+    setError("");
+    setLoadingTests(true);
+    const { data, error } = await sb.rpc("list_published_tests", { p_school_slug: slug });
+    setLoadingTests(false);
+    if (error) { setError(error.message); return; }
+    if (!data || data.length === 0) { setError("No tests are currently open for this school."); return; }
+    setTests(data);
+  }
+
+  async function pickTest(test) {
+    if (!admissionNumber) { setError("Enter your admission number first."); return; }
+    setError("");
+    setStarting(true);
+    const { data, error } = await sb.rpc("start_cbt", {
+      p_test_id: test.id, p_admission_number: admissionNumber, p_school_slug: slug,
+    });
+    setStarting(false);
+    if (error) { setError(error.message); return; }
+    onStarted(data);
+  }
+
+  return (
+    <div className="card">
+      <h1>Computer Based Test</h1>
+      <p className="sub">Enter your details to see available tests.</p>
+      {error && <div className="msg error">{error}</div>}
+      <form onSubmit={loadTests}>
+        <label>School code</label>
+        <input required value={slug} onChange={e => setSlug(e.target.value)} placeholder="e.g. fgc-ijanikin" />
+        <label>Admission number</label>
+        <input required value={admissionNumber} onChange={e => setAdmissionNumber(e.target.value)} />
+        <button type="submit" disabled={loadingTests}>{loadingTests ? "Loading…" : "Find my tests"}</button>
+      </form>
+
+      {tests.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          {tests.map(t => (
+            <div key={t.id} className="test-item" onClick={() => !starting && pickTest(t)}>
+              <strong>{t.title}</strong>
+              <span style={{ fontSize: 13, color: "var(--muted)" }}>{t.duration_minutes} minutes</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TestScreen({ session, onFinished }) {
+  const [index, setIndex] = useState(0);
+  const [selected, setSelected] = useState(null);
+  const [secondsLeft, setSecondsLeft] = useState(session.duration_minutes * 60);
+  const [submitting, setSubmitting] = useState(false);
+  const finishedRef = useRef(false);
+
+  const questions = session.questions;
+  const q = questions[index];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSecondsLeft(s => {
+        if (s <= 1) { clearInterval(timer); handleFinish(); return 0; }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  function fmt(s) {
+    const m = Math.floor(s / 60), r = s % 60;
+    return `${m}:${r.toString().padStart(2, "0")}`;
+  }
+
+  async function next() {
+    if (selected) {
+      await sb.rpc("answer_cbt_question", {
+        p_submission_id: session.submission_id, p_question_id: q.id, p_selected_option: selected,
+      });
+    }
+    setSelected(null);
+    if (index + 1 < questions.length) setIndex(index + 1);
+    else handleFinish();
+  }
+
+  async function handleFinish() {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    setSubmitting(true);
+    if (selected) {
+      await sb.rpc("answer_cbt_question", {
+        p_submission_id: session.submission_id, p_question_id: q.id, p_selected_option: selected,
+      });
+    }
+    const { data: score } = await sb.rpc("finish_cbt", { p_submission_id: session.submission_id });
+    setSubmitting(false);
+    onFinished(score);
+  }
+
+  return (
+    <div className="card">
+      <div className="progress">
+        Question {index + 1} of {questions.length}
+        <span className="timer">{fmt(secondsLeft)}</span>
+      </div>
+      <div className="q-text">{q.question_text}</div>
+      {["a", "b", "c", "d"].map(opt => {
+        const text = q[`option_${opt}`];
+        if (!text) return null;
+        return (
+          <label key={opt} className={`option ${selected === opt ? "selected" : ""}`}>
+            <input type="radio" name="opt" checked={selected === opt} onChange={() => setSelected(opt)} />
+            {text}
+          </label>
+        );
+      })}
+      <button onClick={next} disabled={submitting} style={{ marginTop: 10 }}>
+        {submitting ? "Submitting…" : index + 1 === questions.length ? "Submit test" : "Next question"}
+      </button>
+    </div>
+  );
+}
+
+function ResultScreen({ score }) {
+  return (
+    <div className="card" style={{ textAlign: "center" }}>
+      <h1>Test submitted</h1>
+      <div className="score">{score}%</div>
+      <p className="sub">Your result has been recorded.</p>
+    </div>
+  );
+}
+
+function App() {
+  const [session, setSession] = useState(null);
+  const [score, setScore] = useState(null);
+
+  if (score !== null) return <div className="wrap"><ResultScreen score={score} /></div>;
+  if (session) return <div className="wrap"><TestScreen session={session} onFinished={setScore} /></div>;
+  return <div className="wrap"><EntryScreen onStarted={setSession} /></div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
