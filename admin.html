@@ -149,14 +149,14 @@ function LoginScreen() {
 }
 
 // ---------- Generic table helpers ----------
-function useTable(table, schoolId, extraFilter) {
+function useTable(table, schoolId, extraFilter, orderColumn) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
   async function refresh() {
     if (!schoolId) return;
     setLoading(true);
-    let q = sb.from(table).select("*").eq("school_id", schoolId).order("created_at", { ascending: false });
+    let q = sb.from(table).select("*").eq("school_id", schoolId).order(orderColumn || "created_at", { ascending: false });
     if (extraFilter) q = extraFilter(q);
     const { data } = await q;
     setRows(data || []);
@@ -343,7 +343,7 @@ function Attendance({ schoolId }) {
 
 // ---------- TEACHER CHECK-IN ----------
 function TeacherCheckin({ schoolId, profile }) {
-  const { rows, refresh } = useTable("teacher_attendance", schoolId);
+  const { rows, refresh } = useTable("teacher_attendance", schoolId, null, "date");
   const today = new Date().toISOString().slice(0, 10);
   const myRow = rows.find(r => r.teacher_id === profile.id && r.date === today);
 
@@ -548,7 +548,7 @@ function Assessment({ schoolId }) {
 
 // ---------- REPORT CARDS ----------
 function ReportCards({ schoolId }) {
-  const { rows, refresh } = useTable("report_cards", schoolId);
+  const { rows, refresh } = useTable("report_cards", schoolId, null, "generated_at");
   const [students, setStudents] = useState([]);
   const [form, setForm] = useState(null);
   const [genStudentId, setGenStudentId] = useState("");
